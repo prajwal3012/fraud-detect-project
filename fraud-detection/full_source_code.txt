@@ -1,0 +1,916 @@
+=========================================
+FILE: pom.xml
+=========================================
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.fraud</groupId>
+  <artifactId>fraud-detection</artifactId>
+  <version>1.0</version>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+  </parent>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <properties>
+    <java.version>17</java.version>
+  </properties>
+</project>
+
+=========================================
+FILE: src/main/resources/application.properties
+=========================================
+spring.datasource.url=jdbc:mysql://localhost:3306/fraud_db
+spring.datasource.username=root
+spring.datasource.password=root123
+server.port=8081
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+=========================================
+FILE: src/main/java/com/fraud/FraudDetectionApplication.java
+=========================================
+package com.fraud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class FraudDetectionApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(FraudDetectionApplication.class, args);
+    }
+}
+
+=========================================
+FILE: src/main/java/com/fraud/User.java
+=========================================
+package com.fraud;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class User {
+
+    @Id
+    private String id;
+    private String name;
+    private String password;
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+}
+
+=========================================
+FILE: src/main/java/com/fraud/UserRepository.java
+=========================================
+package com.fraud;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UserRepository extends JpaRepository<User, String> {
+    User findByNameAndPassword(String name, String password);
+    User findByName(String name);
+}
+
+=========================================
+FILE: src/main/java/com/fraud/Transaction.java
+=========================================
+package com.fraud;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class Transaction {
+
+    @Id
+    private String transactionId;
+
+    private String userId;
+    private double amount;
+    private String location;
+    private long timestamp;
+    private String status;
+    private String merchant;
+    private String deviceType;
+    private String ipAddress;
+    private String date;
+    private String time;
+    private String paymentType;
+
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
+    public double getAmount() { return amount; }
+    public void setAmount(double amount) { this.amount = amount; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public String getMerchant() { return merchant; }
+    public void setMerchant(String merchant) { this.merchant = merchant; }
+
+    public String getDeviceType() { return deviceType; }
+    public void setDeviceType(String deviceType) { this.deviceType = deviceType; }
+
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+
+    public String getDate() { return date; }
+    public void setDate(String date) { this.date = date; }
+
+    public String getTime() { return time; }
+    public void setTime(String time) { this.time = time; }
+
+    public String getPaymentType() { return paymentType; }
+    public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
+}
+
+=========================================
+FILE: src/main/java/com/fraud/TransactionRepository.java
+=========================================
+package com.fraud;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface TransactionRepository extends JpaRepository<Transaction, String> {
+    List<Transaction> findByUserId(String userId);
+}
+
+=========================================
+FILE: src/main/java/com/fraud/RulesEngine.java
+=========================================
+package com.fraud;
+
+import org.springframework.stereotype.Service;
+import java.util.*;
+
+@Service
+public class RulesEngine {
+
+    public String evaluate(Transaction t, List<Transaction> history) {
+        int score = 0;
+        List<String> reasons = new ArrayList<>();
+
+        // Rule 1: Amount exceeds 3x mean of history
+        if (!history.isEmpty()) {
+            double sum = 0;
+            for (Transaction tx : history)
+                sum += tx.getAmount();
+            double mean = sum / history.size();
+
+            if (t.getAmount() > mean * 3) {
+                score += 50;
+                reasons.add("Amount > 3x average");
+            }
+        } else {
+            // New user, large initial transaction
+            if (t.getAmount() > 10000) {
+                score += 40;
+                reasons.add("Large initial amount");
+            }
+        }
+
+        // Rule 2: Suspicious locations
+        List<String> riskyLocations = Arrays.asList("Nigeria", "Russia", "North Korea", "Syria", "Unknown");
+        if (t.getLocation() != null && riskyLocations.contains(t.getLocation())) {
+            score += 30;
+            reasons.add("Risky location");
+        }
+
+        // Rule 3: High-Risk merchants
+        List<String> riskyMerchants = Arrays.asList("CryptoExchange", "Casino", "DarkWebMarket");
+        if (t.getMerchant() != null && riskyMerchants.contains(t.getMerchant())) {
+            score += 20;
+            reasons.add("High-risk merchant");
+        }
+
+        // Rule 4: Device Type anomaly
+        if (t.getDeviceType() != null
+                && (t.getDeviceType().equalsIgnoreCase("emulator") || t.getDeviceType().equalsIgnoreCase("unknown"))) {
+            score += 20;
+            reasons.add("Suspicious device type");
+        }
+
+        // Evaluate Threshold
+        if (score >= 50) {
+            return "Fraud - High Severity";
+        } else if (score > 0) {
+            return "Review - Medium Severity";
+        }
+
+        return "Safe - Not Fraud";
+    }
+}
+
+=========================================
+FILE: src/main/java/com/fraud/FraudController.java
+=========================================
+package com.fraud;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.*;
+
+@RestController
+@RequestMapping("/api")
+@CrossOrigin
+public class FraudController {
+
+    @Autowired
+    private UserRepository userRepo;
+
+    @Autowired
+    private TransactionRepository txnRepo;
+
+    @Autowired
+    private RulesEngine engine;
+
+    @PostMapping("/register")
+    public User register(@RequestBody User user) {
+        return userRepo.save(user);
+    }
+
+    @PostMapping("/login")
+    public User login(@RequestBody User req) {
+        return userRepo.findByNameAndPassword(req.getName(), req.getPassword());
+    }
+
+    @PostMapping("/reset-password")
+    public User resetPassword(@RequestBody User req) {
+        User existingUser = userRepo.findByName(req.getName());
+        if (existingUser != null) {
+            existingUser.setPassword(req.getPassword());
+            return userRepo.save(existingUser);
+        }
+        return null;
+    }
+
+    @PostMapping("/transaction")
+    public Transaction process(@RequestBody Transaction txn) {
+
+        List<Transaction> history = txnRepo.findByUserId(txn.getUserId());
+
+        txn.setStatus(engine.evaluate(txn, history));
+
+        return txnRepo.save(txn);
+    }
+
+    @PostMapping("/upload")
+    public List<Transaction> uploadCsv(@RequestParam("file") MultipartFile file) {
+        List<Transaction> results = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            String line;
+            boolean firstLine = true;
+            while ((line = br.readLine()) != null) {
+                if (firstLine) {
+                    firstLine = false; // skip header
+                    continue;
+                }
+                String[] data = line.split(",");
+                if (data.length >= 9) {
+                    Transaction txn = new Transaction();
+                    txn.setTransactionId(UUID.randomUUID().toString());
+                    txn.setUserId(data[0].trim());
+                    txn.setAmount(Double.parseDouble(data[1].trim()));
+                    txn.setLocation(data[2].trim());
+                    txn.setMerchant(data[3].trim());
+                    txn.setDeviceType(data[4].trim());
+                    txn.setIpAddress(data[5].trim());
+                    txn.setDate(data[6].trim());
+                    txn.setTime(data[7].trim());
+                    txn.setPaymentType(data[8].trim());
+                    txn.setTimestamp(System.currentTimeMillis());
+
+                    List<Transaction> history = txnRepo.findByUserId(txn.getUserId());
+                    txn.setStatus(engine.evaluate(txn, history));
+                    results.add(txnRepo.save(txn));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return results;
+    }
+}
+
+=========================================
+FILE: src/main/resources/static/index.html
+=========================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraud Detection System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app"></div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
+
+=========================================
+FILE: src/main/resources/static/styles.css
+=========================================
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    color: #f8fafc;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+}
+
+#app {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 3rem;
+    width: 100%;
+    max-width: 800px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.5s ease-out;
+}
+
+h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    background: linear-gradient(to right, #38bdf8, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+h3 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+input, button, select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+    color: white;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+select option {
+    background-color: #1e1b4b; /* Solid dark blue matching theme */
+    color: white;
+}
+
+input:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+button {
+    background: linear-gradient(135deg, #3b82f6, #4f46e5);
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+button.secondary {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    margin-top: -0.5rem;
+}
+
+button.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.input-grid input {
+    margin-bottom: 0;
+}
+
+.result-box {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    text-align: center;
+    font-weight: 600;
+}
+
+.result-box.fraud {
+    border-left: 4px solid #ef4444;
+    color: #fca5a5;
+}
+
+.result-box.review {
+    border-left: 4px solid #f59e0b;
+    color: #fcd34d;
+}
+
+.result-box.safe {
+    border-left: 4px solid #10b981;
+    color: #6ee7b7;
+}
+
+.file-upload-wrapper {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+th {
+    background: rgba(0, 0, 0, 0.4);
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+=========================================
+FILE: src/main/resources/static/script.js
+=========================================
+const app = document.getElementById("app");
+
+function showLogin() {
+  app.innerHTML = `
+    <h2>Welcome Back</h2>
+    <input id="name" placeholder="Username"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+    <button onclick="login()">Login</button><br>
+    <button class="secondary" onclick="showRegister()">Create Account</button>
+    <button class="secondary" style="border:none;" onclick="showForgotPassword()">Forgot Password?</button>
+  `;
+}
+
+function showForgotPassword() {
+  app.innerHTML = `
+    <h2>Reset Password</h2>
+    <input id="resetName" placeholder="Username"><br>
+    <input type="password" id="newPassword" placeholder="New Password"><br>
+    <button onclick="resetPassword()">Reset Password</button><br>
+    <button class="secondary" onclick="showLogin()">Back to Login</button>
+  `;
+}
+
+async function resetPassword() {
+  const name = document.getElementById("resetName").value;
+  const newPassword = document.getElementById("newPassword").value;
+
+  if (!name || !newPassword) {
+    alert("Please fill all fields.");
+    return;
+  }
+
+  const res = await fetch("/api/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, password: newPassword })
+  });
+
+  if (res.ok && await res.text()) {
+    alert("Password reset successfully!");
+    showLogin();
+  } else {
+    alert("Username not found.");
+  }
+}
+
+function showRegister() {
+  app.innerHTML = `
+    <h2>Create Account</h2>
+    <input id="id" placeholder="User ID"><br>
+    <input id="name" placeholder="Username"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+    <input type="password" id="confirmPassword" placeholder="Confirm Password"><br>
+    <button onclick="register()">Register</button><br>
+    <button class="secondary" onclick="showLogin()">Back to Login</button>
+  `;
+}
+
+async function register() {
+  const id = document.getElementById("id").value;
+  const name = document.getElementById("name").value;
+  const pwd = document.getElementById("password").value;
+  const cpwd = document.getElementById("confirmPassword").value;
+
+  if (!id || !name || !pwd || !cpwd) {
+    alert("Please fill all fields.");
+    return;
+  }
+
+  if (pwd !== cpwd) {
+    alert("Passwords do not match!");
+    return;
+  }
+
+  await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, name, password: pwd })
+  });
+
+  alert("Registered successfully!");
+  showLogin();
+}
+
+async function login() {
+  const name = document.getElementById("name").value;
+  const password = document.getElementById("password").value;
+
+  if (!name || !password) {
+    alert("Please fill all fields. If you do not have an account, please click Create Account to register.");
+    return;
+  }
+
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, password })
+  });
+
+  const text = await res.text();
+  if (!text) {
+    alert("Invalid username or password. If you do not have an account, please click Create Account to register.");
+    return;
+  }
+
+  try {
+    const user = JSON.parse(text);
+    if (user && user.id) {
+      alert("Login successful!");
+      showDashboard(user.id);
+    } else {
+      alert("Invalid username or password. If you do not have an account, please click Create Account to register.");
+    }
+  } catch (e) {
+    alert("An error occurred during login. Please try again.");
+  }
+}
+
+function showDashboard(userId) {
+  app.innerHTML = `
+      <h2>Transaction Dashboard</h2>
+      <h3>Check Individual Transaction</h3>
+      <div class="input-grid">
+          <input type="number" id="amount" placeholder="Amount (e.g. 500)" min="0" onkeydown="if(event.key==='-' || event.key==='e' || event.key==='E') event.preventDefault();">
+          
+          <select id="location">
+              <option value="" disabled selected>Select Country</option>
+              <option value="USA">USA</option>
+              <option value="India">India</option>
+              <option value="UK">UK</option>
+              <option value="Canada">Canada</option>
+              <option value="Australia">Australia</option>
+              <option value="Germany">Germany</option>
+              <option value="France">France</option>
+              <option value="Japan">Japan</option>
+              <option value="Nigeria">Nigeria</option>
+              <option value="Russia">Russia</option>
+          </select>
+          
+          <input id="merchant" placeholder="Merchant (e.g. Amazon)">
+          
+          <select id="deviceType">
+              <option value="" disabled selected>Select Device</option>
+              <option value="Mobile">Mobile</option>
+              <option value="Desktop">Desktop</option>
+              <option value="Tablet">Tablet</option>
+              <option value="Emulator">Emulator</option>
+          </select>
+
+          <input id="ipAddress" placeholder="IP Address (e.g. 192.168.1.1)">
+          <input type="date" id="date" style="width: 100%; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: white;">
+          <input type="time" id="time" style="width: 100%; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: white;">
+          
+          <select id="paymentType">
+              <option value="" disabled selected>Select Payment Type</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="Debit Card">Debit Card</option>
+              <option value="Crypto">Crypto</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Netbanking">Netbanking</option>
+              <option value="UPI">UPI</option>
+          </select>
+      </div>
+      <br>
+      <button onclick="send('${userId}')">Analyze Transaction</button>
+      <div id="res-container"></div>
+      
+      <div class="file-upload-wrapper">
+          <h3>Batch CSV Analysis</h3>
+          <p style="margin-bottom: 1rem; color: #cbd5e1; font-size: 0.9rem;">Format: userId, amount, location, merchant, deviceType, ipAddress, date, time, paymentType</p>
+          <input type="file" id="csvFile" accept=".csv" style="padding: 0.5rem; background: transparent; border: 1px dashed rgba(255,255,255,0.3);">
+          <button onclick="uploadCsv()">Upload and Analyze</button>
+          <div id="csv-results" style="overflow-x: auto;"></div>
+      </div>
+    `;
+}
+
+function getStatusClass(status) {
+  if (status.includes("High Severity")) return "fraud";
+  if (status.includes("Medium Severity")) return "review";
+  return "safe";
+}
+
+function isValidIP(ip) {
+  const regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return regex.test(ip);
+}
+
+async function send(id) {
+  const amountInput = document.getElementById("amount");
+  if (amountInput.validity && amountInput.validity.badInput) {
+    alert("Please enter a valid numeric amount (no special characters or negative signs).");
+    return;
+  }
+
+  const amount = amountInput.value;
+  const location = document.getElementById("location").value;
+  const merchant = document.getElementById("merchant").value;
+  const deviceType = document.getElementById("deviceType").value;
+  const ipAddress = document.getElementById("ipAddress").value;
+  const date = document.getElementById("date").value;
+  const time = document.getElementById("time").value;
+  const paymentType = document.getElementById("paymentType").value;
+
+  if (!amount || !location || !merchant || !deviceType || !ipAddress || !date || !paymentType) {
+    alert("Please fill out all fields.");
+    return;
+  }
+
+  if (!isValidIP(ipAddress)) {
+    alert("Please enter a valid IP address.");
+    return;
+  }
+
+  const res = await fetch("/api/transaction", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      transactionId: Date.now().toString(),
+      userId: id,
+      amount: parseFloat(amount),
+      location,
+      merchant,
+      deviceType,
+      ipAddress,
+      date,
+      time,
+      paymentType,
+      timestamp: Date.now()
+    })
+  });
+
+  const data = await res.json();
+  const statusClass = getStatusClass(data.status);
+
+  document.getElementById("res-container").innerHTML = `
+    <div class="result-box ${statusClass}">
+        <div style="font-size:0.8rem; color:#cbd5e1; margin-bottom:0.5rem;">Txn ID: ${data.transactionId}</div>
+        <div style="font-size:1.2rem;">${data.status}</div>
+    </div>
+  `;
+}
+
+async function uploadCsv() {
+  const fileInput = document.getElementById("csvFile");
+  if (!fileInput.files.length) {
+    alert("Please select a file first");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  document.getElementById("csv-results").innerHTML = "<p>Analyzing...</p>";
+
+  try {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) throw new Error("Server error");
+
+    const data = await res.json();
+
+    if (!data || data.length === 0) {
+      document.getElementById("csv-results").innerHTML = "<p style='color:#f59e0b'>No transactions were processed. Please ensure your CSV has 9 columns matching the specified format and includes a header row.</p>";
+      return;
+    }
+
+    let tableHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>User ID</th>
+                        <th>Amount</th>
+                        <th>Merchant</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+    data.forEach(txn => {
+      const statusClass = getStatusClass(txn.status);
+      const statusColor = statusClass === 'fraud' ? '#fca5a5' : (statusClass === 'review' ? '#fcd34d' : '#6ee7b7');
+      tableHTML += `
+                <tr>
+                    <td style="font-family: monospace;">${txn.transactionId}</td>
+                    <td>${txn.userId}</td>
+                    <td>$${txn.amount}</td>
+                    <td>${txn.merchant}</td>
+                    <td>${txn.location}</td>
+                    <td style="color: ${statusColor}; font-weight: 600;">${txn.status}</td>
+                </tr>
+            `;
+    });
+
+    tableHTML += "</tbody></table>";
+    document.getElementById("csv-results").innerHTML = tableHTML;
+  } catch (e) {
+    console.error(e);
+    document.getElementById("csv-results").innerHTML = "<p style='color:#ef4444'>Invalid CSV file format. Please ensure your CSV uses commas as separators, has exactly 9 columns, and the data matches the expected types.</p>";
+  }
+}
+
+showLogin();
+
+=========================================
+FILE: src/test/java/com/fraud/RulesEngineTest.java
+=========================================
+package com.fraud;
+
+import org.junit.jupiter.api.Test;
+import java.util.Collections;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class RulesEngineTest {
+
+    private final RulesEngine rulesEngine = new RulesEngine();
+
+    @Test
+    public void testCleanTransaction() {
+        Transaction t = new Transaction();
+        t.setAmount(100.0);
+        t.setLocation("USA");
+        t.setDeviceType("Mobile");
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(120.0);
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+        assertEquals("Safe - Not Fraud", result);
+    }
+
+    @Test
+    public void testHighSeverityFraud() {
+        Transaction t = new Transaction();
+        t.setAmount(1500.0);
+        t.setLocation("Nigeria");
+        t.setDeviceType("Emulator");
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(100.0); // Mean is 100
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+
+        // Should trigger: Amount (50) + Location (30) + Device (20) = 100
+        assertTrue(result.contains("Fraud - High Severity"));
+    }
+
+    @Test
+    public void testMediumSeverityReview() {
+        Transaction t = new Transaction();
+        t.setAmount(100.0); // normal amount
+        t.setLocation("Syria"); // Risky location (30)
+        t.setMerchant("NormalStore");
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(100.0);
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+
+        // Should trigger: Location (30) only
+        assertTrue(result.contains("Review - Medium Severity"));
+    }
+
+    @Test
+    public void testNewUserLargeAmount() {
+        Transaction t = new Transaction();
+        t.setAmount(15000.0);
+        t.setLocation("USA");
+
+        String result = rulesEngine.evaluate(t, Collections.emptyList());
+
+        // Should trigger: Large initial amount (40)
+        assertTrue(result.contains("Review - Medium Severity"));
+    }
+}
