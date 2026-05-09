@@ -1,6 +1,4 @@
-=========================================
-FILE: pom.xml
-=========================================
+=== pom.xml ===
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
 
@@ -43,214 +41,7 @@ FILE: pom.xml
   </properties>
 </project>
 
-=========================================
-FILE: src/main/resources/application.properties
-=========================================
-spring.datasource.url=jdbc:mysql://localhost:3306/fraud_db
-spring.datasource.username=root
-spring.datasource.password=root123
-server.port=8081
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-
-=========================================
-FILE: src/main/java/com/fraud/FraudDetectionApplication.java
-=========================================
-package com.fraud;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class FraudDetectionApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(FraudDetectionApplication.class, args);
-    }
-}
-
-=========================================
-FILE: src/main/java/com/fraud/User.java
-=========================================
-package com.fraud;
-
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-
-@Entity
-public class User {
-
-    @Id
-    private String id;
-    private String name;
-    private String password;
-
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
-}
-
-=========================================
-FILE: src/main/java/com/fraud/UserRepository.java
-=========================================
-package com.fraud;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-
-public interface UserRepository extends JpaRepository<User, String> {
-    User findByNameAndPassword(String name, String password);
-    User findByName(String name);
-}
-
-=========================================
-FILE: src/main/java/com/fraud/Transaction.java
-=========================================
-package com.fraud;
-
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-
-@Entity
-public class Transaction {
-
-    @Id
-    private String transactionId;
-
-    private String userId;
-    private double amount;
-    private String location;
-    private long timestamp;
-    private String status;
-    private String merchant;
-    private String deviceType;
-    private String ipAddress;
-    private String date;
-    private String time;
-    private String paymentType;
-
-    public String getTransactionId() { return transactionId; }
-    public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
-
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
-
-    public double getAmount() { return amount; }
-    public void setAmount(double amount) { this.amount = amount; }
-
-    public String getLocation() { return location; }
-    public void setLocation(String location) { this.location = location; }
-
-    public long getTimestamp() { return timestamp; }
-    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public String getMerchant() { return merchant; }
-    public void setMerchant(String merchant) { this.merchant = merchant; }
-
-    public String getDeviceType() { return deviceType; }
-    public void setDeviceType(String deviceType) { this.deviceType = deviceType; }
-
-    public String getIpAddress() { return ipAddress; }
-    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
-
-    public String getDate() { return date; }
-    public void setDate(String date) { this.date = date; }
-
-    public String getTime() { return time; }
-    public void setTime(String time) { this.time = time; }
-
-    public String getPaymentType() { return paymentType; }
-    public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
-}
-
-=========================================
-FILE: src/main/java/com/fraud/TransactionRepository.java
-=========================================
-package com.fraud;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List;
-
-public interface TransactionRepository extends JpaRepository<Transaction, String> {
-    List<Transaction> findByUserId(String userId);
-}
-
-=========================================
-FILE: src/main/java/com/fraud/RulesEngine.java
-=========================================
-package com.fraud;
-
-import org.springframework.stereotype.Service;
-import java.util.*;
-
-@Service
-public class RulesEngine {
-
-    public String evaluate(Transaction t, List<Transaction> history) {
-        int score = 0;
-        List<String> reasons = new ArrayList<>();
-
-        // Rule 1: Amount exceeds 3x mean of history
-        if (!history.isEmpty()) {
-            double sum = 0;
-            for (Transaction tx : history)
-                sum += tx.getAmount();
-            double mean = sum / history.size();
-
-            if (t.getAmount() > mean * 3) {
-                score += 50;
-                reasons.add("Amount > 3x average");
-            }
-        } else {
-            // New user, large initial transaction
-            if (t.getAmount() > 10000) {
-                score += 40;
-                reasons.add("Large initial amount");
-            }
-        }
-
-        // Rule 2: Suspicious locations
-        List<String> riskyLocations = Arrays.asList("Nigeria", "Russia", "North Korea", "Syria", "Unknown");
-        if (t.getLocation() != null && riskyLocations.contains(t.getLocation())) {
-            score += 30;
-            reasons.add("Risky location");
-        }
-
-        // Rule 3: High-Risk merchants
-        List<String> riskyMerchants = Arrays.asList("CryptoExchange", "Casino", "DarkWebMarket");
-        if (t.getMerchant() != null && riskyMerchants.contains(t.getMerchant())) {
-            score += 20;
-            reasons.add("High-risk merchant");
-        }
-
-        // Rule 4: Device Type anomaly
-        if (t.getDeviceType() != null
-                && (t.getDeviceType().equalsIgnoreCase("emulator") || t.getDeviceType().equalsIgnoreCase("unknown"))) {
-            score += 20;
-            reasons.add("Suspicious device type");
-        }
-
-        // Evaluate Threshold
-        if (score >= 50) {
-            return "Fraud - High Severity";
-        } else if (score > 0) {
-            return "Review - Medium Severity";
-        }
-
-        return "Safe - Not Fraud";
-    }
-}
-
-=========================================
-FILE: src/main/java/com/fraud/FraudController.java
-=========================================
+=== src/main/java/com/fraud/FraudController.java ===
 package com.fraud;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -259,6 +50,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 
 @RestController
 @RequestMapping("/api")
@@ -307,6 +101,7 @@ public class FraudController {
     @PostMapping("/upload")
     public List<Transaction> uploadCsv(@RequestParam("file") MultipartFile file) {
         List<Transaction> results = new ArrayList<>();
+        Map<String, List<Transaction>> batchHistory = new HashMap<>();
         try (BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String line;
             boolean firstLine = true;
@@ -328,11 +123,37 @@ public class FraudController {
                     txn.setDate(data[6].trim());
                     txn.setTime(data[7].trim());
                     txn.setPaymentType(data[8].trim());
-                    txn.setTimestamp(System.currentTimeMillis());
+                    if (data.length >= 10) {
+                        txn.setExpectedStatus(data[9].trim());
+                    }
+                    
+                    try {
+                        String dateTimeStr = data[6].trim() + " " + data[7].trim();
+                        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                        long ts = LocalDateTime.parse(dateTimeStr, formatter)
+                                .atZone(ZoneId.systemDefault())
+                                .toInstant()
+                                .toEpochMilli();
+                        txn.setTimestamp(ts);
+                    } catch (Exception e) {
+                        txn.setTimestamp(System.currentTimeMillis());
+                    }
 
+                    // Combine DB history with current batch history for accurate real-time analysis
                     List<Transaction> history = txnRepo.findByUserId(txn.getUserId());
-                    txn.setStatus(engine.evaluate(txn, history));
-                    results.add(txnRepo.save(txn));
+                    List<Transaction> currentBatchUserHistory = batchHistory.getOrDefault(txn.getUserId(), new ArrayList<>());
+                    
+                    List<Transaction> combinedHistory = new ArrayList<>(history);
+                    combinedHistory.addAll(currentBatchUserHistory);
+
+                    txn.setStatus(engine.evaluate(txn, combinedHistory));
+                    
+                    Transaction saved = txnRepo.save(txn);
+                    results.add(saved);
+                    
+                    // Update batch history for next rows in the same upload
+                    currentBatchUserHistory.add(saved);
+                    batchHistory.put(txn.getUserId(), currentBatchUserHistory);
                 }
             }
         } catch (Exception e) {
@@ -340,11 +161,560 @@ public class FraudController {
         }
         return results;
     }
+    @DeleteMapping("/transactions")
+    public Map<String, String> clearAll() {
+        txnRepo.deleteAll();
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "All transactions cleared successfully");
+        return response;
+    }
 }
 
-=========================================
-FILE: src/main/resources/static/index.html
-=========================================
+=== src/main/java/com/fraud/FraudDetectionApplication.java ===
+package com.fraud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class FraudDetectionApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(FraudDetectionApplication.class, args);
+    }
+}
+
+=== src/main/java/com/fraud/RulesEngine.java ===
+package com.fraud;
+
+import org.springframework.stereotype.Service;
+import java.util.*;
+
+@Service
+public class RulesEngine {
+
+    public String evaluate(Transaction t, List<Transaction> history) {
+        int score = 0;
+        List<String> reasons = new ArrayList<>();
+
+        // Rule 1: Amount exceeds 3x mean of history
+        if (!history.isEmpty()) {
+            double sum = 0;
+            for (Transaction tx : history)
+                sum += tx.getAmount();
+            double mean = sum / history.size();
+
+            if (t.getAmount() > 2000 && t.getAmount() > mean * 5) {
+                score += 50;
+                reasons.add("Amount > 5x average and significant (>2000)");
+            }
+        } else {
+            // New user, large initial transaction
+            if (t.getAmount() > 10000) {
+                score += 40;
+                reasons.add("Large initial amount");
+            }
+        }
+
+        // Rule 2: Suspicious locations
+        List<String> riskyLocations = Arrays.asList("Nigeria", "Russia", "North Korea", "Syria", "Unknown");
+        if (t.getLocation() != null && riskyLocations.contains(t.getLocation())) {
+            score += 35;
+            reasons.add("Risky location");
+        }
+
+        // Rule 3: High-Risk merchants
+        List<String> riskyMerchants = Arrays.asList("CryptoExchange", "Casino", "DarkWebMarket");
+        if (t.getMerchant() != null && riskyMerchants.contains(t.getMerchant())) {
+            score += 30;
+            reasons.add("High-risk merchant");
+        }
+
+        // Rule 4: Device Type anomaly
+        if (t.getDeviceType() != null
+                && (t.getDeviceType().equalsIgnoreCase("emulator") || t.getDeviceType().equalsIgnoreCase("unknown"))) {
+            score += 20;
+            reasons.add("Suspicious device type");
+        }
+
+        // Rule 5: High Velocity Check (3+ transactions in 10 mins)
+        long tenMinutesMillis = 10 * 60 * 1000;
+        long recentCount = history.stream()
+                .filter(tx -> !tx.getTransactionId().equals(t.getTransactionId())) // Ignore self
+                .filter(tx -> tx.getTimestamp() != t.getTimestamp()) // Ignore duplicates with same TS
+                .filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < tenMinutesMillis)
+                .count();
+        if (recentCount >= 2) {
+            score += 40;
+            reasons.add("High transaction velocity (3rd+ in 10m)");
+        }
+
+        // Rule 6: Impossible Travel (Different location within 1 hour)
+        long oneHourMillis = 60 * 60 * 1000;
+        boolean impossibleTravel = history.stream()
+                .filter(tx -> !tx.getTransactionId().equals(t.getTransactionId()))
+                .filter(tx -> tx.getTimestamp() != t.getTimestamp())
+                .filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < oneHourMillis)
+                .anyMatch(tx -> t.getLocation() != null && tx.getLocation() != null
+                        && !t.getLocation().equals(tx.getLocation()));
+        if (impossibleTravel) {
+            score += 35;
+            reasons.add("Impossible travel (Location change within 1h)");
+        }
+
+        // Rule 7: Suspicious Time Window (12 AM - 5 AM)
+        if (t.getTime() != null && t.getTime().matches("^0[0-4]:.*")) {
+            score += 15;
+            reasons.add("Transaction during odd hours (12AM-5AM)");
+        }
+
+        // Rule 8: Small Amount Probing (< $10 followed by large txn)
+        if (t.getAmount() > 100) {
+            boolean hasSmallProbing = history.stream()
+                    .filter(tx -> tx.getTimestamp() != t.getTimestamp())
+                    .filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < tenMinutesMillis)
+                    .anyMatch(tx -> tx.getAmount() < 10);
+            if (hasSmallProbing) {
+                score += 30;
+                reasons.add("Potential small amount probing detected");
+            }
+        }
+
+        // Rule 9: Frequent IP Usage (Same user changing IPs frequently)
+        Set<String> distinctIps = history.stream()
+                .filter(tx -> tx.getTimestamp() != t.getTimestamp())
+                .filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < tenMinutesMillis)
+                .map(Transaction::getIpAddress)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (t.getIpAddress() != null) {
+            distinctIps.add(t.getIpAddress());
+        }
+        if (distinctIps.size() > 1) {
+            score += 15;
+            reasons.add("Frequent IP address changes");
+        }
+        // Rule 10: Suspicious Payment Method
+        if (t.getPaymentType() != null && t.getPaymentType().equalsIgnoreCase("WireTransfer")) {
+            score += 15;
+            reasons.add("Risk factor: Wire Transfer");
+        }
+
+        // Evaluate Threshold
+        String result;
+        if (score >= 80) {
+            result = "Fraud - High Severity";
+        } else if (score >= 45) {
+            result = "Review - Medium Severity";
+        } else if (score >= 35) {
+            result = "Low Risk";
+        } else {
+            result = "Safe";
+        }
+
+        return result;
+    }
+}
+
+=== src/main/java/com/fraud/Transaction.java ===
+package com.fraud;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class Transaction {
+
+    @Id
+    private String transactionId;
+
+    private String userId;
+    private double amount;
+    private String location;
+    private long timestamp;
+    private String status;
+    private String merchant;
+    private String deviceType;
+    private String ipAddress;
+    private String date;
+    private String time;
+    private String paymentType;
+    private String expectedStatus;
+
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
+    public double getAmount() { return amount; }
+    public void setAmount(double amount) { this.amount = amount; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public String getMerchant() { return merchant; }
+    public void setMerchant(String merchant) { this.merchant = merchant; }
+
+    public String getDeviceType() { return deviceType; }
+    public void setDeviceType(String deviceType) { this.deviceType = deviceType; }
+
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+
+    public String getDate() { return date; }
+    public void setDate(String date) { this.date = date; }
+
+    public String getTime() { return time; }
+    public void setTime(String time) { this.time = time; }
+
+    public String getPaymentType() { return paymentType; }
+    public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
+
+    public String getExpectedStatus() { return expectedStatus; }
+    public void setExpectedStatus(String expectedStatus) { this.expectedStatus = expectedStatus; }
+}
+
+=== src/main/java/com/fraud/TransactionRepository.java ===
+package com.fraud;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface TransactionRepository extends JpaRepository<Transaction, String> {
+    List<Transaction> findByUserId(String userId);
+}
+
+=== src/main/java/com/fraud/User.java ===
+package com.fraud;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class User {
+
+    @Id
+    private String id;
+    private String name;
+    private String password;
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+}
+
+=== src/main/java/com/fraud/UserRepository.java ===
+package com.fraud;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UserRepository extends JpaRepository<User, String> {
+    User findByNameAndPassword(String name, String password);
+    User findByName(String name);
+}
+
+=== src/test/java/com/fraud/RulesEngineTest.java ===
+package com.fraud;
+
+import org.junit.jupiter.api.Test;
+import java.util.Collections;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class RulesEngineTest {
+
+    private final RulesEngine rulesEngine = new RulesEngine();
+
+    @Test
+    public void testCleanTransaction() {
+        Transaction t = new Transaction();
+        t.setAmount(100.0);
+        t.setLocation("USA");
+        t.setDeviceType("Mobile");
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(120.0);
+        h1.setLocation("USA");
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+        assertTrue(result.contains("Safe - Not Fraud"));
+    }
+
+    @Test
+    public void testHighSeverityFraud() {
+        Transaction t = new Transaction();
+        t.setAmount(1500.0);
+        t.setLocation("Nigeria");
+        t.setDeviceType("Emulator");
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(100.0); 
+        h1.setLocation("Nigeria");
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+
+        // Should trigger: Amount (50) + Location (30) + Device (20) = 100 (High Severity)
+        assertEquals("Fraud - High Severity", result);
+    }
+
+    @Test
+    public void testVelocityFraud() {
+        Transaction t = new Transaction();
+        t.setAmount(100.0);
+        t.setTimestamp(System.currentTimeMillis());
+        
+        java.util.List<Transaction> history = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Transaction h = new Transaction();
+            h.setTimestamp(t.getTimestamp() - 1000); 
+            h.setAmount(50.0);
+            h.setIpAddress("1.1.1.1");
+            history.add(h);
+        }
+
+        String result = rulesEngine.evaluate(t, history);
+        // Velocity adds 40 points -> Medium Severity
+        assertEquals("Review - Medium Severity", result);
+    }
+
+    @Test
+    public void testImpossibleTravel() {
+        Transaction t = new Transaction();
+        t.setLocation("USA");
+        t.setTimestamp(System.currentTimeMillis());
+
+        Transaction h1 = new Transaction();
+        h1.setLocation("UK");
+        h1.setTimestamp(t.getTimestamp() - 3600000); 
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+        // Impossible travel adds 35 points -> Medium Severity
+        assertEquals("Review - Medium Severity", result);
+    }
+
+    @Test
+    public void testSuspiciousTime() {
+        Transaction t = new Transaction();
+        t.setTime("03:45");
+        
+        String result = rulesEngine.evaluate(t, Collections.emptyList());
+        // Suspicious time adds 15 points -> Low Risk
+        assertEquals("Low Risk - Monitor", result);
+    }
+
+    @Test
+    public void testProbingPattern() {
+        Transaction t = new Transaction();
+        t.setAmount(500.0);
+        t.setTimestamp(System.currentTimeMillis());
+
+        Transaction h1 = new Transaction();
+        h1.setAmount(2.0); 
+        h1.setTimestamp(t.getTimestamp() - 60000); 
+        h1.setIpAddress("1.1.1.1");
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+        // Probing (30) + Amount (50) = 80 -> High Severity
+        assertEquals("Fraud - High Severity", result);
+    }
+
+    @Test
+    public void testIPChanges() {
+        Transaction t = new Transaction();
+        t.setIpAddress("1.1.1.1");
+        t.setTimestamp(System.currentTimeMillis());
+
+        Transaction h1 = new Transaction();
+        h1.setIpAddress("2.2.2.2");
+        h1.setTimestamp(t.getTimestamp() - 60000);
+
+        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
+        // IP change adds 25 points -> Low Risk
+        assertEquals("Low Risk - Monitor", result);
+    }
+}
+
+=== scratch/AccuracyCheck.java ===
+import java.util.*;
+import java.io.*;
+
+public class AccuracyCheck {
+    public static void main(String[] args) throws Exception {
+        // Mock RulesEngine for quick check
+        // We'll use the logic from RulesEngine.java
+        
+        File csvFile = new File("test_transactions.csv");
+        BufferedReader br = new BufferedReader(new FileReader(csvFile));
+        String line;
+        br.readLine(); // skip header
+        
+        int total = 0;
+        int matches = 0;
+        
+        Map<String, List<Transaction>> userHistory = new HashMap<>();
+
+        while ((line = br.readLine()) != null) {
+            String[] data = line.split(",");
+            if (data.length < 10) continue;
+            
+            Transaction t = new Transaction();
+            t.setUserId(data[0].trim());
+            t.setAmount(Double.parseDouble(data[1].trim()));
+            t.setLocation(data[2].trim());
+            t.setMerchant(data[3].trim());
+            t.setDeviceType(data[4].trim());
+            t.setIpAddress(data[5].trim());
+            t.setDate(data[6].trim());
+            t.setTime(data[7].trim());
+            t.setPaymentType(data[8].trim());
+            t.setExpectedStatus(data[9].trim());
+            
+            // Mock timestamp
+            String[] timeParts = t.getTime().split(":");
+            long hour = Long.parseLong(timeParts[0]);
+            long min = Long.parseLong(timeParts[1]);
+            t.setTimestamp(hour * 3600000 + min * 60000); // Simple relative timestamp
+
+            List<Transaction> history = userHistory.getOrDefault(t.getUserId(), new ArrayList<>());
+            
+            String status = evaluate(t, history);
+            
+            boolean isDetectedFraud = status.contains("Fraud") || status.contains("Severity") || status.contains("Risk");
+            boolean isExpectedFraud = t.getExpectedStatus().toLowerCase().contains("fraud") || t.getExpectedStatus().toLowerCase().contains("risky");
+            
+            if (isDetectedFraud == isExpectedFraud) {
+                matches++;
+            } else {
+                System.out.println("Mismatch at User: " + t.getUserId() + " Amount: " + t.getAmount() + " Status: [" + status + "] Expected: [" + t.getExpectedStatus() + "]");
+            }
+            
+            total++;
+            history.add(t);
+            userHistory.put(t.getUserId(), history);
+        }
+        
+        System.out.println("Total: " + total);
+        System.out.println("Matches: " + matches);
+        System.out.println("Accuracy: " + (100.0 * matches / total) + "%");
+    }
+
+    public static String evaluate(Transaction t, List<Transaction> history) {
+        int score = 0;
+        if (!history.isEmpty()) {
+            double sum = 0;
+            for (Transaction tx : history) sum += tx.getAmount();
+            double mean = sum / history.size();
+            if (t.getAmount() > 2000 && t.getAmount() > mean * 5) score += 50;
+        } else {
+            if (t.getAmount() > 10000) score += 40;
+        }
+
+        List<String> riskyLocations = Arrays.asList("Nigeria", "Russia", "North Korea", "Syria", "Unknown");
+        if (riskyLocations.contains(t.getLocation())) score += 35;
+
+        List<String> riskyMerchants = Arrays.asList("CryptoExchange", "Casino", "DarkWebMarket");
+        if (riskyMerchants.contains(t.getMerchant())) score += 30;
+
+        if (t.getDeviceType().equalsIgnoreCase("emulator") || t.getDeviceType().equalsIgnoreCase("unknown")) score += 20;
+
+        long tenMinutesMillis = 10 * 60 * 1000;
+        long recentCount = history.stream().filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < tenMinutesMillis).count();
+        if (recentCount >= 2) score += 40;
+
+        long oneHourMillis = 60 * 60 * 1000;
+        boolean impossibleTravel = history.stream().filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < oneHourMillis)
+                .anyMatch(tx -> !t.getLocation().equals(tx.getLocation()));
+        if (impossibleTravel) score += 35;
+
+        if (t.getTime().matches("^0[0-4]:.*")) score += 15;
+
+        if (t.getAmount() > 100) {
+            boolean hasSmallProbing = history.stream().filter(tx -> Math.abs(t.getTimestamp() - tx.getTimestamp()) < tenMinutesMillis)
+                    .anyMatch(tx -> tx.getAmount() < 10);
+            if (hasSmallProbing) score += 30;
+        }
+
+        if (t.getPaymentType().equalsIgnoreCase("WireTransfer")) score += 15;
+
+        if (score >= 80) return "Fraud - High Severity";
+        if (score >= 45) return "Review - Medium Severity";
+        if (score >= 35) return "Low Risk";
+        return "Safe";
+    }
+}
+
+class Transaction {
+    private String userId, location, merchant, deviceType, ipAddress, date, time, paymentType, expectedStatus;
+    private double amount;
+    private long timestamp;
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+    public String getMerchant() { return merchant; }
+    public void setMerchant(String merchant) { this.merchant = merchant; }
+    public String getDeviceType() { return deviceType; }
+    public void setDeviceType(String deviceType) { this.deviceType = deviceType; }
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+    public String getDate() { return date; }
+    public void setDate(String date) { this.date = date; }
+    public String getTime() { return time; }
+    public void setTime(String time) { this.time = time; }
+    public String getPaymentType() { return paymentType; }
+    public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
+    public String getExpectedStatus() { return expectedStatus; }
+    public void setExpectedStatus(String expectedStatus) { this.expectedStatus = expectedStatus; }
+    public double getAmount() { return amount; }
+    public void setAmount(double amount) { this.amount = amount; }
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+}
+
+=== scratch/DebugRules.java ===
+import com.fraud.*;
+import java.util.*;
+
+public class DebugRules {
+    public static void main(String[] args) {
+        RulesEngine engine = new RulesEngine();
+        Transaction t = new Transaction();
+        t.setUserId("user_1");
+        t.setAmount(234.56);
+        t.setLocation("USA");
+        t.setMerchant("Amazon");
+        t.setDeviceType("Mobile");
+        t.setIpAddress("12.34.56.78");
+        t.setTime("10:00");
+        t.setTimestamp(System.currentTimeMillis());
+        t.setPaymentType("CreditCard");
+
+        String status = engine.evaluate(t, new ArrayList<>());
+        System.out.println("Status: " + status);
+    }
+}
+
+=== src/main/resources/application.properties ===
+spring.datasource.url=jdbc:mysql://localhost:3306/fraud_db
+spring.datasource.username=root
+spring.datasource.password=root123
+server.port=8081
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+=== src/main/resources/static/index.html ===
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -355,6 +725,10 @@ FILE: src/main/resources/static/index.html
 </head>
 <body>
 
+<button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Mode">
+    <span id="theme-icon">🌙</span>
+</button>
+
 <div id="app"></div>
 
 <script src="script.js"></script>
@@ -362,177 +736,32 @@ FILE: src/main/resources/static/index.html
 </body>
 </html>
 
-=========================================
-FILE: src/main/resources/static/styles.css
-=========================================
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Inter', sans-serif;
-}
-
-body {
-    background: linear-gradient(135deg, #0f172a, #1e1b4b);
-    color: #f8fafc;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 2rem;
-}
-
-#app {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 3rem;
-    width: 100%;
-    max-width: 800px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    animation: fadeIn 0.5s ease-out;
-}
-
-h2 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 1.5rem;
-    text-align: center;
-    background: linear-gradient(to right, #38bdf8, #818cf8);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-h3 {
-    font-size: 1.5rem;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-    font-weight: 600;
-}
-
-input, button, select {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-}
-
-select option {
-    background-color: #1e1b4b; /* Solid dark blue matching theme */
-    color: white;
-}
-
-input:focus {
-    outline: none;
-    border-color: #38bdf8;
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
-}
-
-button {
-    background: linear-gradient(135deg, #3b82f6, #4f46e5);
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-button.secondary {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    margin-top: -0.5rem;
-}
-
-button.secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.input-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-.input-grid input {
-    margin-bottom: 0;
-}
-
-.result-box {
-    margin-top: 1.5rem;
-    padding: 1.5rem;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.3);
-    text-align: center;
-    font-weight: 600;
-}
-
-.result-box.fraud {
-    border-left: 4px solid #ef4444;
-    color: #fca5a5;
-}
-
-.result-box.review {
-    border-left: 4px solid #f59e0b;
-    color: #fcd34d;
-}
-
-.result-box.safe {
-    border-left: 4px solid #10b981;
-    color: #6ee7b7;
-}
-
-.file-upload-wrapper {
-    margin-top: 2rem;
-    padding-top: 2rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-    font-size: 0.9rem;
-}
-
-th, td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-th {
-    background: rgba(0, 0, 0, 0.4);
-    font-weight: 600;
-    color: #cbd5e1;
-}
-
-tr:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-=========================================
-FILE: src/main/resources/static/script.js
-=========================================
+=== src/main/resources/static/script.js ===
 const app = document.getElementById("app");
+
+// Theme management
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeIcon(newTheme);
+}
+
+function updateThemeIcon(theme) {
+  const icon = document.getElementById('theme-icon');
+  if (icon) {
+    icon.textContent = theme === 'dark' ? '🌙' : '☀️';
+  }
+}
+
+initTheme();
 
 function showLogin() {
   app.innerHTML = `
@@ -682,8 +911,8 @@ function showDashboard(userId) {
           </select>
 
           <input id="ipAddress" placeholder="IP Address (e.g. 192.168.1.1)">
-          <input type="date" id="date" style="width: 100%; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: white;">
-          <input type="time" id="time" style="width: 100%; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: white;">
+          <input type="date" id="date">
+          <input type="time" id="time">
           
           <select id="paymentType">
               <option value="" disabled selected>Select Payment Type</option>
@@ -704,9 +933,26 @@ function showDashboard(userId) {
           <p style="margin-bottom: 1rem; color: #cbd5e1; font-size: 0.9rem;">Format: userId, amount, location, merchant, deviceType, ipAddress, date, time, paymentType</p>
           <input type="file" id="csvFile" accept=".csv" style="padding: 0.5rem; background: transparent; border: 1px dashed rgba(255,255,255,0.3);">
           <button onclick="uploadCsv()">Upload and Analyze</button>
+          <button class="secondary" style="background: #ef4444; border:none; margin-top:0.5rem;" onclick="clearHistory()">Clear All Transactions</button>
           <div id="csv-results" style="overflow-x: auto;"></div>
       </div>
     `;
+}
+
+async function clearHistory() {
+  if (!confirm("Are you sure you want to clear all transaction history? This cannot be undone.")) return;
+  
+  try {
+    const res = await fetch("/api/transactions", { method: "DELETE" });
+    if (res.ok) {
+      alert("All transactions cleared successfully.");
+      document.getElementById("csv-results").innerHTML = "";
+    } else {
+      alert("Failed to clear transactions.");
+    }
+  } catch (e) {
+    alert("Error clearing history.");
+  }
 }
 
 function getStatusClass(status) {
@@ -802,7 +1048,54 @@ async function uploadCsv() {
       return;
     }
 
-    let tableHTML = `
+    // Calculate Summary
+    const summary = {
+      high: 0,
+      medium: 0,
+      low: 0,
+      safe: 0,
+      matches: 0,
+      totalWithExpected: 0
+    };
+
+    data.forEach(txn => {
+      // Risk Counts
+      if (txn.status.includes("High Severity")) summary.high++;
+      else if (txn.status.includes("Medium Severity")) summary.medium++;
+      else if (txn.status.includes("Low Risk")) summary.low++;
+      else summary.safe++;
+
+      // Accuracy Calculation
+        if (txn.expectedStatus) {
+          summary.totalWithExpected++;
+          const isDetectedFraud = !txn.status.toLowerCase().includes("safe");
+          const isExpectedFraud = txn.expectedStatus.toLowerCase().includes("fraud") || txn.expectedStatus.toLowerCase().includes("risky");
+          
+          if (isDetectedFraud === isExpectedFraud) {
+            summary.matches++;
+          }
+        }
+    });
+
+    const accuracy = summary.totalWithExpected > 0 
+      ? ((summary.matches / summary.totalWithExpected) * 100).toFixed(2) 
+      : null;
+
+    // Define "Fraud" as anything not "Safe"
+    const fraudCount = summary.high + summary.medium + summary.low;
+
+    let summaryHTML = `
+      <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--btn-secondary-bg); border-radius: 10px; border-left: 4px solid #38bdf8; display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.95rem; align-items: center;">
+        <div><strong>Total Transactions:</strong> <span style="color: #38bdf8; font-weight: 700;">${data.length}</span></div>
+        <div><strong>Safe:</strong> <span style="color: #10b981; font-weight: 700;">${summary.safe}</span></div>
+        <div><strong>Fraud:</strong> <span style="color: #ef4444; font-weight: 700;">${fraudCount}</span></div>
+        ${accuracy !== null ? `
+          <div><strong>Accuracy:</strong> <span style="color: #818cf8; font-weight: 700;">${accuracy}%</span></div>
+        ` : ''}
+      </div>
+    `;
+
+    let tableHTML = summaryHTML + `
             <table>
                 <thead>
                     <tr>
@@ -819,7 +1112,7 @@ async function uploadCsv() {
 
     data.forEach(txn => {
       const statusClass = getStatusClass(txn.status);
-      const statusColor = statusClass === 'fraud' ? '#fca5a5' : (statusClass === 'review' ? '#fcd34d' : '#6ee7b7');
+      
       tableHTML += `
                 <tr>
                     <td style="font-family: monospace;">${txn.transactionId}</td>
@@ -827,7 +1120,7 @@ async function uploadCsv() {
                     <td>$${txn.amount}</td>
                     <td>${txn.merchant}</td>
                     <td>${txn.location}</td>
-                    <td style="color: ${statusColor}; font-weight: 600;">${txn.status}</td>
+                    <td class="result-box ${statusClass}" style="margin-top:0; padding:0.25rem 0.5rem; background:transparent; border-left:none;">${txn.status}</td>
                 </tr>
             `;
     });
@@ -842,75 +1135,337 @@ async function uploadCsv() {
 
 showLogin();
 
-=========================================
-FILE: src/test/java/com/fraud/RulesEngineTest.java
-=========================================
-package com.fraud;
+=== src/main/resources/static/styles.css ===
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
 
-import org.junit.jupiter.api.Test;
-import java.util.Collections;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class RulesEngineTest {
-
-    private final RulesEngine rulesEngine = new RulesEngine();
-
-    @Test
-    public void testCleanTransaction() {
-        Transaction t = new Transaction();
-        t.setAmount(100.0);
-        t.setLocation("USA");
-        t.setDeviceType("Mobile");
-
-        Transaction h1 = new Transaction();
-        h1.setAmount(120.0);
-
-        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
-        assertEquals("Safe - Not Fraud", result);
-    }
-
-    @Test
-    public void testHighSeverityFraud() {
-        Transaction t = new Transaction();
-        t.setAmount(1500.0);
-        t.setLocation("Nigeria");
-        t.setDeviceType("Emulator");
-
-        Transaction h1 = new Transaction();
-        h1.setAmount(100.0); // Mean is 100
-
-        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
-
-        // Should trigger: Amount (50) + Location (30) + Device (20) = 100
-        assertTrue(result.contains("Fraud - High Severity"));
-    }
-
-    @Test
-    public void testMediumSeverityReview() {
-        Transaction t = new Transaction();
-        t.setAmount(100.0); // normal amount
-        t.setLocation("Syria"); // Risky location (30)
-        t.setMerchant("NormalStore");
-
-        Transaction h1 = new Transaction();
-        h1.setAmount(100.0);
-
-        String result = rulesEngine.evaluate(t, Collections.singletonList(h1));
-
-        // Should trigger: Location (30) only
-        assertTrue(result.contains("Review - Medium Severity"));
-    }
-
-    @Test
-    public void testNewUserLargeAmount() {
-        Transaction t = new Transaction();
-        t.setAmount(15000.0);
-        t.setLocation("USA");
-
-        String result = rulesEngine.evaluate(t, Collections.emptyList());
-
-        // Should trigger: Large initial amount (40)
-        assertTrue(result.contains("Review - Medium Severity"));
-    }
+:root {
+    --bg-gradient: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --app-bg: rgba(255, 255, 255, 0.7);
+    --app-border: rgba(0, 0, 0, 0.1);
+    --input-bg: rgba(255, 255, 255, 0.8);
+    --input-border: rgba(0, 0, 0, 0.1);
+    --btn-secondary-bg: rgba(0, 0, 0, 0.05);
+    --btn-secondary-border: rgba(0, 0, 0, 0.1);
+    --result-bg: rgba(0, 0, 0, 0.05);
+    --table-header: rgba(0, 0, 0, 0.05);
+    --glass-blur: blur(10px);
+    --accent-blue: #3b82f6;
+    --accent-indigo: #4f46e5;
+    --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
 }
+
+[data-theme='dark'] {
+    --bg-gradient: linear-gradient(135deg, #0f172a, #1e1b4b);
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --app-bg: rgba(255, 255, 255, 0.05);
+    --app-border: rgba(255, 255, 255, 0.1);
+    --input-bg: rgba(0, 0, 0, 0.2);
+    --input-border: rgba(255, 255, 255, 0.2);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.05);
+    --btn-secondary-border: rgba(255, 255, 255, 0.3);
+    --result-bg: rgba(0, 0, 0, 0.3);
+    --table-header: rgba(0, 0, 0, 0.4);
+    --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: var(--bg-gradient);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+#app {
+    background: var(--app-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--app-border);
+    border-radius: 20px;
+    padding: 3rem;
+    width: 100%;
+    max-width: 800px;
+    box-shadow: var(--card-shadow);
+    animation: fadeIn 0.5s ease-out;
+    transition: all 0.3s ease;
+}
+
+h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    background: linear-gradient(to right, #38bdf8, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+h3 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+input, button, select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+select option {
+    background-color: var(--input-bg);
+    color: var(--text-primary);
+}
+
+/* Ensure dark background for options in dark mode specifically */
+[data-theme='dark'] select option {
+    background-color: #1e1b4b;
+}
+
+input:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+button {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+button.secondary {
+    background: var(--btn-secondary-bg);
+    border: 1px solid var(--btn-secondary-border);
+    color: var(--text-primary);
+    margin-top: -0.5rem;
+}
+
+button.secondary:hover {
+    background: rgba(128, 128, 128, 0.1);
+}
+
+.input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.input-grid input {
+    margin-bottom: 0;
+}
+
+.result-box {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 10px;
+    background: var(--result-bg);
+    text-align: center;
+    font-weight: 600;
+}
+
+.result-box.fraud {
+    border-left: 4px solid #ef4444;
+    color: #ef4444;
+}
+
+.result-box.review {
+    border-left: 4px solid #f59e0b;
+    color: #f59e0b;
+}
+
+.result-box.safe {
+    border-left: 4px solid #10b981;
+    color: #10b981;
+}
+
+[data-theme='dark'] .result-box.fraud { color: #fca5a5; }
+[data-theme='dark'] .result-box.review { color: #fcd34d; }
+[data-theme='dark'] .result-box.safe { color: #6ee7b7; }
+
+.file-upload-wrapper {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--app-border);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--app-border);
+}
+
+th {
+    background: var(--table-header);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+tr:hover {
+    background: var(--btn-secondary-bg);
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: var(--app-bg);
+    border: 1px solid var(--app-border);
+    backdrop-filter: var(--glass-blur);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    padding: 0;
+    margin: 0;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1) rotate(15deg);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.risk-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    animation: fadeIn 0.4s ease-out;
+}
+
+.summary-item {
+    background: var(--btn-secondary-bg);
+    padding: 1.25rem 1rem;
+    border-radius: 16px;
+    text-align: center;
+    border: 1px solid var(--app-border);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.summary-item:hover {
+    transform: translateY(-5px);
+}
+
+.summary-item strong {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .summary-item {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+=== .vscode/settings.json ===
+{
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m -Xlog:disable",
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "git.ignoreLimitWarning": true
+}
+
+=== test_transactions.csv ===
+userId,amount,location,merchant,deviceType,ipAddress,date,time,paymentType,expectedStatus
+user_1,234.56,USA,Amazon,Mobile,12.34.56.78,2026-04-27,10:00,CreditCard,Safe
+user_2,15000.0,Nigeria,Casino,Emulator,23.45.67.89,2026-04-27,02:30,WireTransfer,Fraud
+user_3,150.0,USA,Starbucks,Mobile,34.56.78.90,2026-04-27,10:02,DebitCard,Safe
+user_4,4500.0,Russia,DarkWebMarket,Laptop,45.67.89.12,2026-04-27,03:15,WireTransfer,Fraud
+user_5,89.99,Germany,Tesco,Tablet,56.78.90.23,2026-04-27,10:04,PayPal,Safe
+user_6,12000.0,North Korea,CryptoExchange,Emulator,67.89.12.34,2026-04-27,04:45,WireTransfer,Fraud
+user_7,3.5,USA,AppStore,Mobile,78.90.23.45,2026-04-27,01:30,CreditCard,Safe
+user_7,500.0,USA,StoreA,Mobile,78.90.23.45,2026-04-27,01:45,CreditCard,Safe
+user_8,250.0,UK,Amazon,Laptop,89.12.34.56,2026-04-27,10:08,CreditCard,Safe
+user_9,4500.0,Syria,Casino,Mobile,90.23.45.67,2026-04-27,10:09,DebitCard,Fraud
+user_10,1200.0,Russia,Casino,Mobile,12.34.56.78,2026-04-27,10:10,WireTransfer,Fraud
+user_11,5555.5,USA,Starbucks,Emulator,23.45.67.89,2026-04-27,10:11,CreditCard,Safe
+user_12,10.0,USA,Amazon,Desktop,34.56.78.90,2026-04-27,10:12,DebitCard,Safe
+user_13,8000.0,USA,CryptoExchange,Emulator,45.67.89.12,2026-04-27,10:13,WireTransfer,Fraud
+user_14,75.0,France,Tesco,Mobile,56.78.90.23,2026-04-27,10:14,CreditCard,Safe
+user_15,15.0,USA,Walmart,Mobile,67.89.12.34,2026-04-27,10:15,DebitCard,Safe
+user_16,5000.0,North Korea,DarkWebMarket,Laptop,78.90.23.45,2026-04-27,10:16,WireTransfer,Fraud
+user_17,120.0,USA,Amazon,Mobile,89.12.34.56,2026-04-27,10:17,CreditCard,Safe
+user_18,4500.0,Germany,Casino,Emulator,90.23.45.67,2026-04-27,10:18,DebitCard,Fraud
+user_19,90.0,USA,BestBuy,Tablet,12.34.56.78,2026-04-27,10:19,CreditCard,Safe
+user_20,200.0,USA,Walmart,Mobile,23.45.67.89,2026-04-27,10:20,CreditCard,Safe
+user_velocity,50.0,USA,GasStation,Mobile,1.1.1.1,2026-04-27,11:00,CreditCard,Safe
+user_velocity,51.0,USA,GasStation,Mobile,1.1.1.1,2026-04-27,11:01,CreditCard,Safe
+user_velocity,52.0,USA,GasStation,Mobile,1.1.1.1,2026-04-27,11:02,CreditCard,Fraud
+user_velocity,53.0,USA,GasStation,Mobile,1.1.1.1,2026-04-27,11:03,CreditCard,Fraud
+user_traveler,100.0,USA,Amazon,Mobile,2.2.2.2,2026-04-27,12:00,CreditCard,Safe
+user_traveler,150.0,Japan,Sony,Mobile,3.3.3.3,2026-04-27,12:05,CreditCard,Fraud
+user_21,12.5,USA,McDonalds,Mobile,11.22.33.44,2026-04-27,12:06,CreditCard,Safe
+user_22,45.9,Nigeria,Target,Laptop,22.33.44.55,2026-04-27,12:07,DebitCard,Fraud
+user_23,89.0,UK,Tesco,Mobile,33.44.55.66,2026-04-27,12:08,CreditCard,Safe
+user_24,2000.0,Germany,CryptoExchange,Emulator,44.55.66.77,2026-04-27,12:09,PayPal,Fraud
+user_25,15.0,USA,Starbucks,Mobile,55.66.77.88,2026-04-27,12:10,CreditCard,Safe
+user_26,120.0,USA,BestBuy,Mobile,66.77.88.99,2026-04-27,12:11,CreditCard,Safe
+user_27,5.0,USA,AppStore,Mobile,77.88.99.11,2026-04-27,12:12,DebitCard,Safe
+user_28,45.0,Russia,GasStation,Mobile,88.99.11.22,2026-04-27,12:13,CreditCard,Fraud
+user_29,90.0,USA,Walmart,Laptop,99.11.22.33,2026-04-27,12:14,CreditCard,Safe
+user_30,150.0,USA,Amazon,Mobile,11.22.33.44,2026-04-27,12:15,CreditCard,Safe
+user_31,2500.0,USA,Casino,Emulator,22.33.44.55,2026-04-27,12:16,DebitCard,Fraud
+user_32,400.0,USA,BestBuy,Mobile,33.44.55.66,2026-04-27,12:17,CreditCard,Safe
+user_33,12.0,USA,McDonalds,Mobile,44.55.66.77,2026-04-27,12:18,CreditCard,Safe
+user_34,89.9,USA,Target,Laptop,55.66.77.88,2026-04-27,12:19,DebitCard,Safe
+user_35,200.0,UK,Tesco,Mobile,66.77.88.99,2026-04-27,12:20,CreditCard,Safe
+user_36,15.0,Germany,Amazon,Desktop,77.88.99.11,2026-04-27,12:21,PayPal,Safe
+user_37,12000.0,USA,CryptoExchange,Emulator,88.99.11.22,2026-04-27,12:22,CreditCard,Fraud
+user_38,5.0,USA,BestBuy,Mobile,99.11.22.33,2026-04-27,12:23,DebitCard,Safe
+user_39,45.0,USA,AppStore,Mobile,11.22.33.44,2026-04-27,12:24,CreditCard,Safe
+user_40,90.0,USA,GasStation,Laptop,22.33.44.55,2026-04-27,12:25,CreditCard,Safe
+user_41,1200.0,North Korea,Walmart,Mobile,33.44.55.66,2026-04-27,12:26,CreditCard,Fraud
+user_42,45.9,USA,Amazon,Mobile,44.55.66.77,2026-04-27,12:27,DebitCard,Safe
