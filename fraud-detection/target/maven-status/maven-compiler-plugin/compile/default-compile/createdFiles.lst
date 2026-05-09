@@ -1,7 +1,0 @@
-com\fraud\UserRepository.class
-com\fraud\Transaction.class
-com\fraud\TransactionRepository.class
-com\fraud\FraudController.class
-com\fraud\FraudDetectionApplication.class
-com\fraud\RulesEngine.class
-com\fraud\User.class
