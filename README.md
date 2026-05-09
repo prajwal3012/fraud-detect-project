@@ -13,7 +13,7 @@ A Java-based fraud detection web application that analyzes transactions and flag
 
 * Java
 * Maven
-* Spring Boot (if used)
+* Spring Boot
 * HTML / CSS / JavaScript
 
 ## Project Structure
